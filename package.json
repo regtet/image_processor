@@ -1,0 +1,15 @@
+{
+  "name": "image-processor",
+  "version": "1.0.0",
+  "description": "图片批量处理工具 - 格式转换 + 压缩",
+  "main": "image_processor.js",
+  "scripts": {
+    "start": "node image_processor.js",
+    "install-browser": "npx playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}
+
+
