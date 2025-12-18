@@ -111,97 +111,100 @@ function unzipFile(zipPath, destDir) {
 }
 
 /**
- * 步骤1: 转换图片格式为 AVIF
+ * 步骤1: 转换图片格式为 AVIF (带重试机制)
  */
-async function convertImages(page, images, outputDir) {
-    console.log('  [转换] 正在打开转换页面...');
+async function convertImages(context, images, outputDir, retryCount = 0) {
+    const maxRetries = 1;
+    const page = await context.newPage();
     
-    // 直接打开 AVIF 转换专用页面（无需选择格式）
-    await page.goto('https://to.imagestool.com/zh-CN/image-to-avif', { 
-        waitUntil: 'networkidle',
-        timeout: 60000 
-    });
-    
-    await sleep(3000);
-    
-    console.log(`  [转换] 正在上传 ${images.length} 张图片...`);
-    const fileInput = page.locator('input[type="file"]:not([webkitdirectory])').first();
-    await fileInput.setInputFiles(images);
-    
-    console.log('  [转换] 等待图片加载...');
-    await sleep(5000);
-    
-    // 设置画质和压缩强度（滑块）
-    console.log('  [转换] 设置参数: 画质100, 压缩强度1');
     try {
-        // 画质滑块: max=100
-        const qualitySlider = page.locator('input[type="range"][max="100"]').first();
-        if (await qualitySlider.isVisible({ timeout: 3000 })) {
-            await qualitySlider.evaluate((el) => {
-                el.value = 100;
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-            console.log('  [转换] 画质已设置为 100');
-        }
+        console.log('  [转换] 正在打开转换页面...');
         
-        // 压缩强度滑块: max=8
-        const strengthSlider = page.locator('input[type="range"][max="8"]').first();
-        if (await strengthSlider.isVisible({ timeout: 3000 })) {
-            await strengthSlider.evaluate((el) => {
-                el.value = 1;
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-            console.log('  [转换] 压缩强度已设置为 1');
-        }
+        // 直接打开 AVIF 转换专用页面（无需选择格式）
+        await page.goto('https://to.imagestool.com/zh-CN/image-to-avif', { 
+            waitUntil: 'networkidle',
+            timeout: 60000 
+        });
         
-        await sleep(1000);
-        console.log('  [转换] 参数设置完成');
-    } catch (e) {
-        console.log(`  [转换] 参数设置失败: ${e.message}`);
-    }
-    
-    // 点击开始按钮 (class="button_start")
-    try {
-        const startBtn = page.locator('button.button_start').first();
-        if (await startBtn.isVisible({ timeout: 5000 })) {
-            console.log('  [转换] 点击开始按钮...');
-            await startBtn.click();
-        }
-    } catch (e) {
-        console.log('  [转换] 没有找到开始按钮，可能自动处理中...');
-    }
-    
-    console.log('  [转换] 正在转换中，请等待所有图片完成...');
-    
-    // 等待处理完成 - 查找下载按钮出现（最多等5分钟）
-    let downloadReady = false;
-    for (let i = 0; i < 30; i++) {  // 最多等待 30 * 10秒 = 5分钟
-        await sleep(10000);
-        console.log(`  [转换] 等待中... (${(i+1)*10}秒)`);
+        await sleep(3000);
         
-        // 检查下载按钮是否出现
+        console.log(`  [转换] 正在上传 ${images.length} 张图片...`);
+        const fileInput = page.locator('input[type="file"]:not([webkitdirectory])').first();
+        await fileInput.setInputFiles(images);
+        
+        console.log('  [转换] 等待图片加载...');
+        await sleep(5000);
+        
+        // 设置画质和压缩强度（滑块）
+        console.log('  [转换] 设置参数: 画质100, 压缩强度1');
         try {
-            const btn = page.locator('button:has-text("下载"), a:has-text("下载")').first();
-            if (await btn.isVisible({ timeout: 2000 })) {
-                downloadReady = true;
-                console.log('  [转换] 处理完成，下载按钮已出现!');
-                break;
+            // 画质滑块: max=100
+            const qualitySlider = page.locator('input[type="range"][max="100"]').first();
+            if (await qualitySlider.isVisible({ timeout: 3000 })) {
+                await qualitySlider.evaluate((el) => {
+                    el.value = 100;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+                console.log('  [转换] 画质已设置为 100');
             }
-        } catch (e) {}
-    }
-    
-    if (!downloadReady) {
-        console.log('  [转换] 等待超时，尝试查找下载按钮...');
-    }
-    
-    await sleep(3000);
-    console.log('  [转换] 正在查找下载按钮...');
-    
-    let downloadPath = null;
-    
-    try {
+            
+            // 压缩强度滑块: max=8
+            const strengthSlider = page.locator('input[type="range"][max="8"]').first();
+            if (await strengthSlider.isVisible({ timeout: 3000 })) {
+                await strengthSlider.evaluate((el) => {
+                    el.value = 1;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+                console.log('  [转换] 压缩强度已设置为 1');
+            }
+            
+            await sleep(1000);
+            console.log('  [转换] 参数设置完成');
+        } catch (e) {
+            console.log(`  [转换] 参数设置失败: ${e.message}`);
+        }
+        
+        // 点击开始按钮 (class="button_start")
+        try {
+            const startBtn = page.locator('button.button_start').first();
+            if (await startBtn.isVisible({ timeout: 5000 })) {
+                console.log('  [转换] 点击开始按钮...');
+                await startBtn.click();
+            }
+        } catch (e) {
+            console.log('  [转换] 没有找到开始按钮，可能自动处理中...');
+        }
+        
+        console.log('  [转换] 正在转换中，请等待所有图片完成...');
+        
+        // 等待处理完成 - 查找下载按钮出现（最多等5分钟）
+        let downloadReady = false;
+        for (let i = 0; i < 30; i++) {  // 最多等待 30 * 10秒 = 5分钟
+            await sleep(10000);
+            console.log(`  [转换] 等待中... (${(i+1)*10}秒)`);
+            
+            // 检查下载按钮是否出现
+            try {
+                const btn = page.locator('button:has-text("下载"), a:has-text("下载")').first();
+                if (await btn.isVisible({ timeout: 2000 })) {
+                    downloadReady = true;
+                    console.log('  [转换] 处理完成，下载按钮已出现!');
+                    break;
+                }
+            } catch (e) {}
+        }
+        
+        if (!downloadReady) {
+            console.log('  [转换] 等待超时，尝试查找下载按钮...');
+        }
+        
+        await sleep(3000);
+        console.log('  [转换] 正在查找下载按钮...');
+        
+        let downloadPath = null;
+        
         // 精确定位下载按钮: 紫色按钮包含"下载 Zip"文字
         const downloadBtn = page.locator('button.bg-purple-500:has-text("下载 Zip"), button:has-text("下载 Zip")').first();
         
@@ -218,75 +221,91 @@ async function convertImages(page, images, outputDir) {
             await download.saveAs(downloadPath);
             console.log(`  [转换] 已保存: ${path.basename(downloadPath)}`);
         } else {
-            console.log('  [转换] 未找到下载按钮');
+            throw new Error('未找到下载按钮，可能被广告遮挡');
         }
+        
+        await page.close();
+        return downloadPath;
+        
     } catch (e) {
-        console.log(`  [转换] 下载失败: ${e.message}`);
+        console.log(`  [转换] 失败: ${e.message}`);
+        await page.close();
+        
+        // 重试机制
+        if (retryCount < maxRetries) {
+            console.log(`  [转换] 正在重试... (${retryCount + 1}/${maxRetries})`);
+            await sleep(2000);
+            return convertImages(context, images, outputDir, retryCount + 1);
+        } else {
+            console.log('  [转换] 重试次数已用完，跳过转换步骤');
+            return null;
+        }
     }
-    
-    return downloadPath;
 }
 
 /**
- * 步骤2: 压缩图片
+ * 步骤2: 压缩图片 (带重试机制)
  */
-async function compressImages(page, images, outputDir) {
-    console.log('  [压缩] 正在打开压缩页面...');
+async function compressImages(context, images, outputDir, retryCount = 0) {
+    const maxRetries = 1;
+    const page = await context.newPage();
     
-    await page.goto('https://tiny.imagestool.com/zh-CN/image-compressor', {
-        waitUntil: 'networkidle',
-        timeout: 60000
-    });
-    
-    await sleep(3000);
-    
-    console.log(`  [压缩] 正在上传 ${images.length} 张图片...`);
-    const fileInput = page.locator('input[type="file"]:not([webkitdirectory])').first();
-    await fileInput.setInputFiles(images);
-    
-    console.log('  [压缩] 等待图片加载...');
-    await sleep(5000);
-    
-    // 点击开始按钮 (class="button_start")
     try {
-        const startBtn = page.locator('button.button_start').first();
-        if (await startBtn.isVisible({ timeout: 5000 })) {
-            console.log('  [压缩] 点击开始按钮...');
-            await startBtn.click();
-        }
-    } catch (e) {
-        console.log('  [压缩] 没有找到开始按钮，可能自动处理中...');
-    }
-    
-    console.log('  [压缩] 正在压缩中，请等待所有图片完成...');
-    
-    // 等待处理完成 - 查找下载按钮出现（最多等5分钟）
-    let downloadReady = false;
-    for (let i = 0; i < 30; i++) {  // 最多等待 30 * 10秒 = 5分钟
-        await sleep(10000);
-        console.log(`  [压缩] 等待中... (${(i+1)*10}秒)`);
+        console.log('  [压缩] 正在打开压缩页面...');
         
-        // 检查下载按钮是否出现
+        await page.goto('https://tiny.imagestool.com/zh-CN/image-compressor', {
+            waitUntil: 'networkidle',
+            timeout: 60000
+        });
+        
+        await sleep(3000);
+        
+        console.log(`  [压缩] 正在上传 ${images.length} 张图片...`);
+        const fileInput = page.locator('input[type="file"]:not([webkitdirectory])').first();
+        await fileInput.setInputFiles(images);
+        
+        console.log('  [压缩] 等待图片加载...');
+        await sleep(5000);
+        
+        // 点击开始按钮 (class="button_start")
         try {
-            const btn = page.locator('button:has-text("下载"), a:has-text("下载")').first();
-            if (await btn.isVisible({ timeout: 2000 })) {
-                downloadReady = true;
-                console.log('  [压缩] 处理完成，下载按钮已出现!');
-                break;
+            const startBtn = page.locator('button.button_start').first();
+            if (await startBtn.isVisible({ timeout: 5000 })) {
+                console.log('  [压缩] 点击开始按钮...');
+                await startBtn.click();
             }
-        } catch (e) {}
-    }
-    
-    if (!downloadReady) {
-        console.log('  [压缩] 等待超时，尝试查找下载按钮...');
-    }
-    
-    await sleep(3000);
-    console.log('  [压缩] 正在查找下载按钮...');
-    
-    let downloadPath = null;
-    
-    try {
+        } catch (e) {
+            console.log('  [压缩] 没有找到开始按钮，可能自动处理中...');
+        }
+        
+        console.log('  [压缩] 正在压缩中，请等待所有图片完成...');
+        
+        // 等待处理完成 - 查找下载按钮出现（最多等5分钟）
+        let downloadReady = false;
+        for (let i = 0; i < 30; i++) {  // 最多等待 30 * 10秒 = 5分钟
+            await sleep(10000);
+            console.log(`  [压缩] 等待中... (${(i+1)*10}秒)`);
+            
+            // 检查下载按钮是否出现
+            try {
+                const btn = page.locator('button:has-text("下载"), a:has-text("下载")').first();
+                if (await btn.isVisible({ timeout: 2000 })) {
+                    downloadReady = true;
+                    console.log('  [压缩] 处理完成，下载按钮已出现!');
+                    break;
+                }
+            } catch (e) {}
+        }
+        
+        if (!downloadReady) {
+            console.log('  [压缩] 等待超时，尝试查找下载按钮...');
+        }
+        
+        await sleep(3000);
+        console.log('  [压缩] 正在查找下载按钮...');
+        
+        let downloadPath = null;
+        
         // 精确定位下载按钮: 紫色按钮包含"下载 Zip"文字
         const downloadBtn = page.locator('button.bg-purple-500:has-text("下载 Zip"), button:has-text("下载 Zip")').first();
         
@@ -303,13 +322,26 @@ async function compressImages(page, images, outputDir) {
             await download.saveAs(downloadPath);
             console.log(`  [压缩] 已保存: ${path.basename(downloadPath)}`);
         } else {
-            console.log('  [压缩] 未找到下载按钮');
+            throw new Error('未找到下载按钮，可能被广告遮挡');
         }
+        
+        await page.close();
+        return downloadPath;
+        
     } catch (e) {
-        console.log(`  [压缩] 下载失败: ${e.message}`);
+        console.log(`  [压缩] 失败: ${e.message}`);
+        await page.close();
+        
+        // 重试机制
+        if (retryCount < maxRetries) {
+            console.log(`  [压缩] 正在重试... (${retryCount + 1}/${maxRetries})`);
+            await sleep(2000);
+            return compressImages(context, images, outputDir, retryCount + 1);
+        } else {
+            console.log('  [压缩] 重试次数已用完，跳过压缩步骤');
+            return null;
+        }
     }
-    
-    return downloadPath;
 }
 
 /**
@@ -333,11 +365,9 @@ async function processFolder(context, folderPath, outputDir) {
     const folderOutput = path.join(outputDir, folderName);
     ensureDir(folderOutput);
     
-    // 步骤1: 转换为 AVIF
+    // 步骤1: 转换为 AVIF (带重试机制)
     console.log('\n  >>> 步骤1: 转换为 AVIF 格式');
-    const page1 = await context.newPage();
-    const convertedZip = await convertImages(page1, images, folderOutput);
-    await page1.close();
+    const convertedZip = await convertImages(context, images, folderOutput);
     
     // 步骤2: 处理转换后的文件（可能是zip或单个图片）
     let avifImages = [];
@@ -363,12 +393,10 @@ async function processFolder(context, folderPath, outputDir) {
         }
     }
     
-    // 步骤3: 压缩 AVIF 图片
+    // 步骤3: 压缩 AVIF 图片 (带重试机制)
     if (avifImages.length > 0) {
         console.log('\n  >>> 步骤2: 压缩 AVIF 图片');
-        const page2 = await context.newPage();
-        await compressImages(page2, avifImages, folderOutput);
-        await page2.close();
+        await compressImages(context, avifImages, folderOutput);
         
         // 清理临时目录
         const unzipDir = path.join(folderOutput, 'avif_temp');
@@ -379,9 +407,7 @@ async function processFolder(context, folderPath, outputDir) {
     } else {
         console.log('  [警告] 没有 AVIF 图片可压缩，使用原图压缩...');
         console.log('\n  >>> 步骤2: 压缩原图');
-        const page2 = await context.newPage();
-        await compressImages(page2, images, folderOutput);
-        await page2.close();
+        await compressImages(context, images, folderOutput);
     }
     
     // 解压压缩后的ZIP，清理中间文件
@@ -496,15 +522,34 @@ async function main() {
     ensureDir(outputDir);
     console.log(`\n输出将保存到: ${outputDir}`);
     
-    // 是否显示浏览器
-    const showBrowser = (await prompt('\n显示浏览器窗口? (Y/n): ')).toLowerCase() !== 'n';
-    
-    // 并行处理数量
-    let parallelCount = 1;
+    // 一次性确认所有选项
+    console.log('\n' + '-'.repeat(50));
+    console.log('请确认以下选项 (用空格分隔，直接回车使用默认值):');
+    console.log('  1. 显示浏览器窗口? (Y/n) [默认: Y]');
     if (subfolders.length > 1) {
-        const parallelInput = await prompt('同时处理几个文件夹? (1-3, 默认1): ');
-        parallelCount = Math.min(3, Math.max(1, parseInt(parallelInput) || 1));
+        console.log('  2. 同时处理几个文件夹? (1-10) [默认: 3]');
+        console.log('\n示例: y 3  或  n 5  或直接回车');
+    } else {
+        console.log('\n示例: y  或  n  或直接回车');
     }
+    console.log('-'.repeat(50));
+    
+    const answers = (await prompt('请输入: ')).trim().split(/\s+/);
+    
+    // 解析答案
+    const showBrowser = (answers[0] || 'y').toLowerCase() !== 'n';
+    let parallelCount = 3;  // 默认值改为3
+    if (subfolders.length > 1) {
+        parallelCount = Math.min(10, Math.max(1, parseInt(answers[1]) || 3));  // 上限改为10，默认3
+    } else {
+        parallelCount = 1;
+    }
+    
+    // 显示确认的设置
+    console.log('\n设置确认:');
+    console.log(`  - 显示浏览器: ${showBrowser ? '是' : '否'}`);
+    console.log(`  - 并行数量: ${parallelCount}`);
+    console.log(`  - 待处理: ${subfolders.length} 个文件夹`);
     
     await prompt('\n按回车键开始处理...');
     
@@ -526,6 +571,12 @@ async function main() {
         contexts.push(context);
     }
     
+    // 统计成功和失败
+    const results = {
+        success: [],
+        failed: []
+    };
+    
     try {
         // 并行处理文件夹
         let completed = 0;
@@ -536,14 +587,17 @@ async function main() {
             const batch = subfolders.slice(i, i + parallelCount);
             const tasks = batch.map((folder, idx) => {
                 const context = contexts[idx];
+                const folderName = path.basename(folder);
                 return processFolder(context, folder, outputDir)
                     .then(() => {
                         completed++;
+                        results.success.push(folderName);
                         console.log(`\n[总进度: ${completed}/${total}]`);
                     })
                     .catch(e => {
                         completed++;
-                        console.log(`[错误] 处理 ${path.basename(folder)} 失败: ${e.message}`);
+                        results.failed.push({ name: folderName, error: e.message });
+                        console.log(`[错误] 处理 ${folderName} 失败: ${e.message}`);
                     });
             });
             
@@ -559,8 +613,22 @@ async function main() {
         }
     }
     
+    // 输出最终统计日志
     console.log('\n' + '='.repeat(50));
-    console.log('✓ [完成] 所有文件夹处理完毕!');
+    console.log('处理完成! 统计结果:');
+    console.log('='.repeat(50));
+    
+    console.log(`\n✅ 成功: ${results.success.length} 个`);
+    if (results.success.length > 0) {
+        results.success.forEach(name => console.log(`   - ${name}`));
+    }
+    
+    console.log(`\n❌ 失败: ${results.failed.length} 个`);
+    if (results.failed.length > 0) {
+        results.failed.forEach(item => console.log(`   - ${item.name}: ${item.error}`));
+    }
+    
+    console.log('\n' + '-'.repeat(50));
     console.log(`输出目录: ${outputDir}`);
     console.log('='.repeat(50));
     
