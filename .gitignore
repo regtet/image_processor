@@ -1,3 +1,20 @@
+# 依赖目录
+node_modules/
+
+# Playwright / Chrome 持久化配置与缓存
+_pw_profile/
+_google_profile/
+_chrome_profile/
+
+# 本地生成的输出结果
+google_art_output/
+_processed_output/
+
+# 压缩包及临时文件
+*.zip
+*.tmp
+*.log
+
 node_modules/
 dist/
 .env
