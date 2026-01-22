@@ -42,11 +42,17 @@ echo.
 echo [INFO] Processing folder: %FOLDER_PATH%
 echo.
 
+:loop
 :: Run main program with folder path as argument
 node image_processor.js "%FOLDER_PATH%"
 
 echo.
 echo ========================================
-echo   Done! Press any key to exit...
+echo   流程完成！按回车键重新开始流程
+echo   输入 q 后回车可退出
 echo ========================================
-pause >nul
+set /p RESTART=""
+if /i "%RESTART%"=="q" (
+    exit /b 0
+)
+goto loop

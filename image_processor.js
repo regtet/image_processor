@@ -479,7 +479,7 @@ async function processFolder(context, folderPath, outputDir) {
     console.log(`\n  ✓ 完成! 输出目录: ${folderOutput}`);
 }
 
-async function main() {
+async function processOnce(initialFolder = null) {
     console.log('='.repeat(50));
     console.log('  图片批量处理器');
     console.log('  转换为 AVIF → 解压 → 压缩');
@@ -488,7 +488,7 @@ async function main() {
     // 默认使用 Downloads 文件夹
     const downloadsPath = 'C:\\Users\\18272\\Downloads';
     
-    let parentFolder = process.argv[2];
+    let parentFolder = initialFolder || process.argv[2];
     if (!parentFolder) {
         console.log(`\n默认文件夹: ${downloadsPath}`);
         const useDefault = await prompt('使用默认文件夹? (Y/n): ');
@@ -502,16 +502,14 @@ async function main() {
     
     if (!fs.existsSync(parentFolder)) {
         console.log('[错误] 文件夹不存在: ' + parentFolder);
-        await prompt('按回车键退出...');
-        process.exit(1);
+        return false;
     }
     
     // 获取子文件夹
     const subfolders = getSubfolders(parentFolder);
     if (subfolders.length === 0) {
         console.log('[错误] 没有找到子文件夹');
-        await prompt('按回车键退出...');
-        process.exit(1);
+        return false;
     }
     
     console.log(`\n找到 ${subfolders.length} 个子文件夹:`);
@@ -632,7 +630,31 @@ async function main() {
     console.log(`输出目录: ${outputDir}`);
     console.log('='.repeat(50));
     
-    await prompt('\n按回车键退出...');
+    return true;
+}
+
+async function main() {
+    let isFirstRun = true;
+    let initialFolder = process.argv[2] ? process.argv[2].replace(/^["']|["']$/g, '') : null;
+    
+    while (true) {
+        try {
+            // 第一次运行且通过命令行参数传入文件夹时使用它，否则每次重新选择
+            const folderToUse = (isFirstRun && initialFolder) ? initialFolder : null;
+            await processOnce(folderToUse);
+            isFirstRun = false; // 标记已运行过一次
+        } catch (e) {
+            console.error('[错误]', e);
+        }
+        
+        console.log('\n' + '='.repeat(50));
+        const answer = await prompt('按回车键重新开始流程，输入 q 退出: ');
+        if (answer.toLowerCase() === 'q') {
+            console.log('程序已退出。');
+            break;
+        }
+        console.log('\n');
+    }
 }
 
 main().catch(console.error);
