@@ -487,6 +487,7 @@ async function processOnce(initialFolder = null) {
     
     // 默认使用 Downloads 文件夹
     const downloadsPath = 'C:\\Users\\18272\\Downloads';
+    const nonInteractive = process.env.IMG_NON_INTERACTIVE === '1';
     
     let parentFolder = initialFolder || process.argv[2];
     if (!parentFolder) {
@@ -520,27 +521,51 @@ async function processOnce(initialFolder = null) {
     ensureDir(outputDir);
     console.log(`\n输出将保存到: ${outputDir}`);
     
-    // 一次性确认所有选项
-    console.log('\n' + '-'.repeat(50));
-    console.log('请确认以下选项 (用空格分隔，直接回车使用默认值):');
-    console.log('  1. 显示浏览器窗口? (Y/n) [默认: Y]');
-    if (subfolders.length > 1) {
-        console.log('  2. 同时处理几个文件夹? (1-10) [默认: 3]');
-        console.log('\n示例: y 3  或  n 5  或直接回车');
+    // 一次性确认所有选项（支持环境变量自动配置）
+    let showBrowser;
+    let parallelCount;
+
+    const envShow = process.env.IMG_SHOW_BROWSER;   // 'y' 或 'n'
+    const envParallel = process.env.IMG_PARALLEL;   // 数字字符串
+
+    if (envShow || envParallel || nonInteractive) {
+        // 使用环境变量自动配置，不再交互
+        showBrowser = (envShow || (nonInteractive ? 'n' : 'y')).toLowerCase() !== 'n';
+
+        if (subfolders.length > 1) {
+            const parsed = parseInt(envParallel || (nonInteractive ? '5' : '3'), 10);
+            parallelCount = Math.min(10, Math.max(1, isNaN(parsed) ? (nonInteractive ? 5 : 3) : parsed));
+        } else {
+            parallelCount = 1;
+        }
+
+        console.log('\n' + '-'.repeat(50));
+        console.log('已从环境变量/非交互模式读取设置:');
+        console.log(`  - 显示浏览器: ${showBrowser ? '是' : '否'} (IMG_SHOW_BROWSER=${envShow || (nonInteractive ? 'n' : 'y')})`);
+        console.log(`  - 并行数量: ${parallelCount} (IMG_PARALLEL=${envParallel || (nonInteractive ? '5' : '3')})`);
+        console.log('-'.repeat(50));
     } else {
-        console.log('\n示例: y  或  n  或直接回车');
-    }
-    console.log('-'.repeat(50));
-    
-    const answers = (await prompt('请输入: ')).trim().split(/\s+/);
-    
-    // 解析答案
-    const showBrowser = (answers[0] || 'y').toLowerCase() !== 'n';
-    let parallelCount = 3;  // 默认值改为3
-    if (subfolders.length > 1) {
-        parallelCount = Math.min(10, Math.max(1, parseInt(answers[1]) || 3));  // 上限改为10，默认3
-    } else {
-        parallelCount = 1;
+        // 走原来的交互流程
+        console.log('\n' + '-'.repeat(50));
+        console.log('请确认以下选项 (用空格分隔，直接回车使用默认值):');
+        console.log('  1. 显示浏览器窗口? (Y/n) [默认: Y]');
+        if (subfolders.length > 1) {
+            console.log('  2. 同时处理几个文件夹? (1-10) [默认: 3]');
+            console.log('\n示例: y 3  或  n 5  或直接回车');
+        } else {
+            console.log('\n示例: y  或  n  或直接回车');
+        }
+        console.log('-'.repeat(50));
+        
+        const answers = (await prompt('请输入: ')).trim().split(/\s+/);
+        
+        // 解析答案
+        showBrowser = (answers[0] || 'y').toLowerCase() !== 'n';
+        if (subfolders.length > 1) {
+            parallelCount = Math.min(10, Math.max(1, parseInt(answers[1]) || 3));  // 上限改为10，默认3
+        } else {
+            parallelCount = 1;
+        }
     }
     
     // 显示确认的设置
@@ -549,7 +574,9 @@ async function processOnce(initialFolder = null) {
     console.log(`  - 并行数量: ${parallelCount}`);
     console.log(`  - 待处理: ${subfolders.length} 个文件夹`);
     
-    await prompt('\n按回车键开始处理...');
+    if (!nonInteractive) {
+        await prompt('\n按回车键开始处理...');
+    }
     
     console.log(`\n正在启动 ${parallelCount} 个浏览器实例...`);
     
@@ -635,8 +662,19 @@ async function processOnce(initialFolder = null) {
 
 async function main() {
     let isFirstRun = true;
+    const nonInteractive = process.env.IMG_NON_INTERACTIVE === '1';
     let initialFolder = process.argv[2] ? process.argv[2].replace(/^["']|["']$/g, '') : null;
     
+    if (nonInteractive) {
+        try {
+            const folderToUse = (isFirstRun && initialFolder) ? initialFolder : null;
+            await processOnce(folderToUse);
+        } catch (e) {
+            console.error('[错误]', e);
+        }
+        return;
+    }
+
     while (true) {
         try {
             // 第一次运行且通过命令行参数传入文件夹时使用它，否则每次重新选择
