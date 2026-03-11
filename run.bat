@@ -176,6 +176,11 @@ set "IMG_PARALLEL=5"
 set "IMG_NON_INTERACTIVE=1"
 node image_processor.js "%FOLDER_PATH%"
 
+if "%IMG_NON_INTERACTIVE%"=="1" (
+    set "EXIT_CODE=0"
+    goto end_all
+)
+
 echo.
 echo ========================================
 echo   流程完成！按回车键重新开始流程
